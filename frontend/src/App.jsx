@@ -22,6 +22,7 @@ import AdminDashboardPage from './pages/AdminDashboardPage'
 import FeatureAdPage from './pages/FeatureAdPage'
 import PaymentSuccessPage from './pages/PaymentSuccessPage'
 import PaymentCancelPage from './pages/PaymentCancelPage'
+import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
