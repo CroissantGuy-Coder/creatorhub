@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
@@ -13,7 +14,7 @@ const TABS = [
 ]
 
 export default function DashboardPage() {
-  const { user, updateUser, refreshUser } = useAuth()
+  const { user, updateUser, refreshUser, logout } = useAuth()
   const navigate = useNavigate()
   const [tab, setTab] = useState('my-ads')
   const [myAds, setMyAds] = useState([])
@@ -21,16 +22,19 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const fileInputRef = useRef()
 
-  const [profileForm, setProfileForm] = useState({
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirm: '' })
     bio: user?.bio || '',
     skills: (user?.skills || []).join(', '),
     social_links: user?.social_links || [],
   })
-  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirm: '' })
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [profileForm, setProfileForm] = useState({
   const [savingProfile, setSavingProfile] = useState(false)
-  const [savingPassword, setSavingPassword] = useState(false)
 
-  useEffect(() => {
+  const [savingPassword, setSavingPassword] = useState(false)
     if (tab === 'my-ads') {
       setLoading(true)
       api.get('/users/dashboard/my-ads')
@@ -81,8 +85,29 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleChangePassword() {
-    if (passwordForm.newPassword.length < 8) {
+  async function handleDeleteAccount() {
+    if (deleteConfirmText !== 'DELETE') {
+      toast.error('Please type DELETE to confirm')
+      return
+    }
+    if (!deletePassword) {
+      toast.error('Please enter your password')
+      return
+    }
+    setDeletingAccount(true)
+    try {
+      await api.delete('/users/account/delete', { data: { password: deletePassword } })
+      toast.success('Account permanently deleted')
+      logout()
+      navigate('/')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete account')
+    } finally {
+      setDeletingAccount(false)
+    }
+  }
+
+  async function handleChangePassword() {    if (passwordForm.newPassword.length < 8) {
       toast.error('New password must be at least 8 characters')
       return
     }
@@ -414,11 +439,89 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 </div>
+
+                {/* Danger Zone */}
+                <div className="pt-5 border-t border-red-500/20">
+                  <h3 className="font-semibold text-red-400 mb-1">Danger Zone</h3>
+                  <p className="text-slate-400 text-sm mb-4">
+                    Permanently delete your account. This removes your profile, all advertisements,
+                    saved ads, and every piece of data associated with your account. This cannot be undone.
+                  </p>
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    className="btn-danger text-sm px-5 py-2.5"
+                  >
+                    🗑️ Delete My Account
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="card w-full max-w-md p-6 border-red-500/30 animate-slide-up">
+            <div className="text-center mb-5">
+              <div className="text-4xl mb-3">⚠️</div>
+              <h2 className="font-display font-bold text-white text-xl mb-2">Delete Account</h2>
+              <p className="text-slate-400 text-sm">
+                This will permanently delete <span className="text-white font-semibold">{user?.username}</span>'s account
+                and ALL associated data including ads, saved items, and profile info.
+                <span className="text-red-400 font-semibold"> This cannot be undone.</span>
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="label">Enter your password to confirm</label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={e => setDeletePassword(e.target.value)}
+                  className="input border-red-500/30 focus:ring-red-500"
+                  placeholder="Your password"
+                />
+              </div>
+
+              <div>
+                <label className="label">
+                  Type <span className="text-red-400 font-mono font-bold">DELETE</span> to confirm
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={e => setDeleteConfirmText(e.target.value)}
+                  className="input border-red-500/30 focus:ring-red-500"
+                  placeholder="DELETE"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false)
+                  setDeletePassword('')
+                  setDeleteConfirmText('')
+                }}
+                className="btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deletingAccount || deleteConfirmText !== 'DELETE' || !deletePassword}
+                className="btn-danger flex-1 disabled:opacity-40"
+              >
+                {deletingAccount ? 'Deleting...' : 'Permanently Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

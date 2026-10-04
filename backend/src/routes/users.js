@@ -172,4 +172,67 @@ router.post('/save/:adId', authenticateToken, (req, res) => {
   res.json({ saved: true, message: 'Advertisement saved' });
 });
 
+// DELETE /api/users/account/delete — permanently delete account and ALL data
+router.delete('/account/delete', authenticateToken, async (req, res) => {
+  const bcrypt = require('bcryptjs');
+  const { password } = req.body;
+
+  if (!password) {
+    return res.status(400).json({ error: 'Password is required to delete your account' });
+  }
+
+  // Verify password before deleting
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const validPassword = await bcrypt.compare(password, user.password_hash);
+  if (!validPassword) {
+    return res.status(401).json({ error: 'Incorrect password' });
+  }
+
+  // Cannot delete an admin account this way
+  if (user.role === 'admin') {
+    return res.status(403).json({ error: 'Admin accounts cannot be self-deleted' });
+  }
+
+  try {
+    // Delete avatar image file if exists
+    if (user.avatar_url) {
+      const avatarPath = path.join(__dirname, '..', '..', user.avatar_url.replace('/uploads/', 'uploads/'));
+      if (fs.existsSync(avatarPath)) {
+        try { fs.unlinkSync(avatarPath); } catch {}
+      }
+    }
+
+    // Delete all reference images from this user's advertisements
+    const userAds = db.prepare('SELECT reference_images FROM advertisements WHERE user_id = ?').all(user.id);
+    userAds.forEach(ad => {
+      const images = JSON.parse(ad.reference_images || '[]');
+      images.forEach(imgUrl => {
+        const imgPath = path.join(__dirname, '..', '..', imgUrl.replace('/uploads/', 'uploads/'));
+        if (fs.existsSync(imgPath)) {
+          try { fs.unlinkSync(imgPath); } catch {}
+        }
+      });
+    });
+
+    // Delete all data from database — CASCADE handles related records
+    // Order matters: delete dependent tables first
+    db.prepare('DELETE FROM saved_advertisements WHERE user_id = ?').run(user.id);
+    db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').run(user.id);
+    db.prepare('DELETE FROM reports WHERE reporter_id = ?').run(user.id);
+    db.prepare('DELETE FROM flagged_links WHERE user_id = ?').run(user.id);
+    db.prepare('DELETE FROM payments WHERE user_id = ?').run(user.id);
+    db.prepare('DELETE FROM advertisements WHERE user_id = ?').run(user.id);
+    db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+
+    res.json({
+      message: 'Your account and all associated data has been permanently deleted.'
+    });
+  } catch (err) {
+    console.error('Delete account error:', err);
+    res.status(500).json({ error: 'Failed to delete account. Please try again.' });
+  }
+});
+
 module.exports = router;
