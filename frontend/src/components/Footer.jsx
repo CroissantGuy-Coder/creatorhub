@@ -64,9 +64,15 @@ export default function Footer() {
           <p className="text-slate-500 text-sm">
             © {new Date().getFullYear()} CreatorHub. All rights reserved.
           </p>
-          <p className="text-slate-600 text-xs">
-            Built for creators, by creators.
-          </p>
+          <div className="flex items-center gap-4">
+            <Link to="/terms" className="text-slate-500 hover:text-slate-300 text-xs transition-colors">
+              Terms & Conditions
+            </Link>
+            <span className="text-slate-700">·</span>
+            <p className="text-slate-600 text-xs">
+              Built for creators, by creators.
+            </p>
+          </div>
         </div>
       </div>
     </footer>
